@@ -1,58 +1,77 @@
-# service/llm_api.py
+# src/service/ai/llm_api.py
 
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Request, Body
+from typing import Any, Dict
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError  
 
 import src.common.common_codes as codes
-from src.service.ai.asset.prompts.prompts_cfg import (SYSTEM_PROMPTS, 
-                                                      SURVEY_TEXT_PROMPTS)
-
-# 라우터 등록은 여기서 하고 실제 로직은 service에서 관리
-# http://localhost:8000/
+from src.service.ai.asset.prompts.prompts_cfg import (
+    SYSTEM_PROMPTS,
+    SURVEY_TEXT_PROMPTS,
+)
+from src.service.ai.llm_schemas import SurveyTextReq, SurveyReports
 
 router = APIRouter(prefix="/v1/generate", tags=["generate"])
 
-# POST /v1/generate/survey
+
 @router.post("/survey")
-async def generate_survey(request: Request, data: Dict[str, Any] = Body(...)):
+async def generate_survey(request: Request, body: SurveyTextReq):
     """
-    프론트엔드에서 전달받은 orig_text를 기반으로 LLM 호출 수행
+    프론트엔드에서 전달받은 tid, orig_text를 기반으로 LLM 호출 수행 후
+    파싱 결과(reports) 반환
     """
     ctx = request.app.state.ctx
-    orig_text = data.get("orig_text")
+    tid = body.tid
+    orig_text = body.orig_text
 
-    if not orig_text:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": codes.ResponseStatus.BAD_REQUEST
-            }
-        )
     try:
         resp_text = await ctx.llm_manager.generate(
             SURVEY_TEXT_PROMPTS,
             placeholders={"orig_text": orig_text},
             temperature=0.7,
         )
+        # print(resp_text)
+        parsed: Dict[str, Any] = ctx.llm_manager.parse_result(resp_text)
 
-        parsed = ctx.llm_manager.parse_reports(resp_text)
+        # reports 스키마 검증
+        reports_valid = SurveyReports(**parsed).model_dump()
 
+        # 성공 응답
         return JSONResponse(
             status_code=200,
             content={
+                "tid": tid,
                 "status": codes.ResponseStatus.SUCCESS,
-                "data": parsed
-            }
+                "data": reports_valid
+            },
+        )
+    
+    # 스키마 위반
+    except ValidationError as ve:
+        
+        return JSONResponse(
+            status_code=502,
+            content={
+                "tid": tid,
+                "status": {
+                    **codes.ResponseStatus.SERVER_ERROR,
+                    "detail": f"Schema validation failed: {ve.errors()}",
+                },
+                "data": None,
+            },
         )
 
+    # 일반 예외 
     except Exception as e:
         return JSONResponse(
             status_code=502,
             content={
+                "tid": tid,
                 "status": {
                     **codes.ResponseStatus.SERVER_ERROR,
-                    "detail": str(e)
+                    "detail": str(e),
                 },
-            }
+                "data": None,
+            },
         )

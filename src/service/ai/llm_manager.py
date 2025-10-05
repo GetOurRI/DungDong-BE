@@ -89,7 +89,7 @@ class LLMManager:
 
         return _PLACEHOLDER_RE.sub(repl, text)
     
-    def parse_reports(self, raw_text: str) -> dict:
+    def parse_result(self, raw_text: str) -> dict:
         """
         Gemini 응답에서 첫 번째 JSON 블록만 뽑아 time과 함께 반환
         """
@@ -103,11 +103,8 @@ class LLMManager:
             raw_json = match.group(0).strip() if match else "{}"
 
         try:
-            reports = json.loads(raw_json)
+            result = json.loads(raw_json)
         except Exception:
-            reports = {}
+            result = {}
 
-        return {
-            "time": int(time.time()),
-            "reports": reports
-        }
+        return result
