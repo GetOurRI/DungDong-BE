@@ -1,16 +1,12 @@
-# v1 기본 예제
-# service/v1/analyze_api.py
+# service/llm_api.py
 
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-from typing import Dict, Iterable, Any
-
-import httpx
-from fastapi import APIRouter, HTTPException, Request
+from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, Request, Body
+from fastapi.responses import JSONResponse
 
 import src.common.common_codes as codes
 from src.service.ai.asset.prompts.prompts_cfg import (SYSTEM_PROMPTS, 
-                                                      SURVEY_PROMPTS)
+                                                      SURVEY_TEXT_PROMPTS)
 
 # 라우터 등록은 여기서 하고 실제 로직은 service에서 관리
 # http://localhost:8000/
@@ -27,18 +23,36 @@ async def generate_survey(request: Request, data: Dict[str, Any] = Body(...)):
     orig_text = data.get("orig_text")
 
     if not orig_text:
-        raise HTTPException(status_code=400, detail="Missing field: orig_text")
-
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": codes.ResponseStatus.BAD_REQUEST
+            }
+        )
     try:
-        # LLM 호출
         resp_text = await ctx.llm_manager.generate(
-            SURVEY_PROMPTS,
+            SURVEY_TEXT_PROMPTS,
             placeholders={"orig_text": orig_text},
             temperature=0.7,
         )
 
-        # 결과 파싱 후 반환
-        return ctx.llm_manager.parse_reports(resp_text)
+        parsed = ctx.llm_manager.parse_reports(resp_text)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": codes.ResponseStatus.SUCCESS,
+                "data": parsed
+            }
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM generation failed: {e}")
+        return JSONResponse(
+            status_code=502,
+            content={
+                "status": {
+                    **codes.ResponseStatus.SERVER_ERROR,
+                    "detail": str(e)
+                },
+            }
+        )
