@@ -1,0 +1,4 @@
+Build Command
+pip install --upgrade pip && pip install -r requirements.txt && mkdir -p logs
+
+python src/dungdong_be.py
