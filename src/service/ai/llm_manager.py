@@ -18,7 +18,7 @@ class LLMManager:
             # 보안을 위해 환경 변수에서 API 키를 가져옵니다.
             api_key = os.environ.get("GEMINI_API_KEY")
             if not api_key:
-                raise ValueError("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
+                raise ValueError("GEMINI_API_KEY environment variable is not set.")
             
             genai.configure(api_key=api_key)
             self.gemini_model = genai.GenerativeModel(self.model)
@@ -50,9 +50,7 @@ class LLMManager:
                 response = await to_thread(_call_gemini)
                 return response.text
             except Exception as e:
-                print(f"Gemini API 호출 중 오류 발생: {e}")
-                # 필요한 경우 response.prompt_feedback 등을 통해 추가 정보 확인 가능
-                return ""
+                return f"[Gemini] API call failed: {e}"
         
         return "" # __init__에서 provider를 검증하므로 실행될 일 없음
 
